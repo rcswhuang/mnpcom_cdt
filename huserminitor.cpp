@@ -50,7 +50,7 @@ void HUserMinitor::closeSerialPort()
 
 void HUserMinitor::getShowData(const QByteArray &data)
 {
-    showData(data);
+    //showData(data);
 }
 
 void HUserMinitor::handleWritten(const QByteArray& data)
@@ -58,7 +58,7 @@ void HUserMinitor::handleWritten(const QByteArray& data)
     m_writeData = data;
 
     qint64 bytesWritten = m_serialPort->write(data);
-    showData(data);
+    //showData(data);
 
     if (bytesWritten == -1) {
         m_standardOutput << QObject::tr("Failed to write the data to port %1, error: %2").arg(m_serialPort->portName()).arg(m_serialPort->errorString()) << endl;
@@ -72,6 +72,7 @@ void HUserMinitor::handleWritten(const QByteArray& data)
 void HUserMinitor::handleReadyRead()
 {
     //加到队列里面
+    m_readData.clear();
     m_readData.append(m_serialPort->readAll());
     m_protocol->processFrame(m_readData);
     showData(m_readData);
@@ -111,14 +112,16 @@ void HUserMinitor::handleError(QSerialPort::SerialPortError serialPortError)
     }
 }
 
-void HUserMinitor::showData(const QByteArray &writeData)
+void HUserMinitor::showData(const QByteArray& data)
 {
     QString temp,temp1;
-    for(int i=0;i<writeData.length();i++)
+    for(int i = 0;i < data.length();i++)
     {
-         temp1 = QString("%1 ").arg((int)writeData[i],0,16);
-         temp += temp1;
+        uchar value = (uchar)data[i];
+        temp1 = QString("%1 ").arg(value,2,16,QLatin1Char('0'));
+        temp += temp1;
     }
+    temp += " \n";
     ui->textBrowser->insertPlainText(temp);
     QScrollBar *bar = ui->textBrowser->verticalScrollBar();
     bar->setValue(bar->maximum());

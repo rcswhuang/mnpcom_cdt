@@ -61,6 +61,7 @@ HProtocol::HProtocol(QObject *parent) : QObject(parent)
 
 }
 
+//
 void HProtocol::sendAllYx()
 {
 

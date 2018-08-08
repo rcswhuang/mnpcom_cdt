@@ -248,7 +248,7 @@ bool PLUGIN_EXPORT pluginProc(int type,unsigned int param1,long long param2)
         break;
     case PLG_CHANGEDYX:
         break;
-    case PLG_PLUGINCONFIG:
+    case PLG_PLUGINCONFIG://运行时也要设置回调函数，可以获取实时状态
         userHandle.pluginConfig((LPPLUGINPROC)param2);
         break;
     case PLG_SHOWMSGWIN://查看报文状态

@@ -27,7 +27,7 @@ public slots:
 public:
     void openSerialPort();
     void closeSerialPort();
-    void showData(const QByteArray &writeData);
+    void showData(const QByteArray& data);
 private slots:
     void handleWritten(const QByteArray &writeData);
     void handleReadyRead();
