@@ -5,6 +5,7 @@
 #include <QString>
 #include "hpointseldlg.h"
 #include "huserminitor.h"
+#include "hprotocol.h"
 #define DATA_TYPE_STATION  0x01
 #define DATA_TYPE_DIGITAL  0x02
 #define DATA_TYPE_ANALOGUE 0x03
@@ -14,6 +15,18 @@ HUserHandle::HUserHandle(QObject *parent) : QObject(parent)
     m_lpPluginCallback = NULL;
     m_strConfigFilePath = QProcessEnvironment::systemEnvironment().value(SYSENVIRONMENTVAR) + "/data/cdt.ini";
     m_settings = new QSettings(m_strConfigFilePath,QSettings::IniFormat);
+    connect(m_Timer,SIGNAL(timeout()),this,SLOT(sendCdt()));
+}
+
+HUserHandle::~HUserHandle()
+{
+    //最好把STATION,ANALOGUE,DIGITAL结构换成简单点 ---huangw
+    while(!m_stationList.isEmpty())
+        delete (STATION*)m_stationList.takeFirst();
+    while(!m_analogueList.isEmpty())
+        delete (ANALOGUE*)m_analogueList.takeFirst();
+    while(!m_digitalList.isEmpty())
+        delete (DIGITAL*)m_digitalList.takeFirst();
 }
 
 void HUserHandle::initConfig()
@@ -71,19 +84,7 @@ void HUserHandle::showConfig()
     HPointSelDlg dlg(this);
     dlg.exec();
 }
-/*
- * [Time]
- * yxSendTime = 10
- * ycSendTime = 20
- * [Serial]
- * portName = Com1
- * baudRate = 19200
- * [YXLIST]
- * count = 100
- * 0=1,1,xxxxxx
- * ......
- *
-*/
+
 void HUserHandle::loadData()
 {
     piConfig.m_wSendYxTime = m_settings->value("TIME/yxSendTime",30).toUInt();
@@ -149,8 +150,9 @@ void HUserHandle::saveData()
 
 void HUserHandle::initProc()
 {
-    HUserMinitor *dlg = new HUserMinitor(this);
+    HUserMinitor *dlg = new HUserMinitor(this);//启动报文监视窗口
     dlg->hide();
+    //启动时间定时发送
 }
 
 void HUserHandle::exitProc()
@@ -223,6 +225,27 @@ bool HUserHandle::findPointInDb(quint8 type,quint16 stNo,quint16 ptNo)
      }
     }
     return bfind;
+}
+
+void HUserHandle::sendCdt()
+{
+    static int nSendYx = 0;
+    static int nSendYc = 0;
+    while(nSendYx < piConfig.m_wSendYxTime)
+        nSendYx++;
+    if(wSendYx == piConfig.m_wSendYxTime)
+    {
+        wSendYx = 0;
+        m_Protocol.sendAllYx();
+    }
+
+    while(nSendYc < piConfig.m_wSendYcTime)
+        nSendYc++;
+    if(wSendYc == piConfig.m_wSendYcTime)
+    {
+        wSendYc = 0;
+        m_Protocol.sendAllYc();
+    }
 }
 
 /////////////////////////////////////////////////////////////////////////////////

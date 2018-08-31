@@ -2,8 +2,10 @@
 #define HUSERHANDLE_H
 #include <QObject>
 #include <QMetaType>
+#include <QTimer>
 #include "huserdbapi.h"
 class QSettings;
+class HProtocol;
 typedef struct _tagpointItem
 {
     quint16 wStationNo;
@@ -28,6 +30,7 @@ class HUserHandle : public QObject
     Q_OBJECT
 public:
     explicit HUserHandle(QObject *parent = 0);
+    ~HUserHandle();
 
 public:
     void initConfig();
@@ -42,10 +45,11 @@ public:
 public:
     QString getPointName(quint8 type,quint16 stNo,quint16 ptNo);
     bool findPointInDb(quint8 type,quint16 stNo,quint16 ptNo);
+    void SendChangeYx();
 signals:
 
 public slots:
-
+    void sendCdt();
 public:
     QString m_strConfigFilePath;
     LPPLUGINPROC m_lpPluginCallback;
@@ -55,6 +59,8 @@ public:
 public:
     PLUGINCONFIG piConfig;
     QSettings  *m_settings;
+    QTimer m_Timer;
+    HProtocol m_Protocol;
 private:
     QString strUserName;
 };

@@ -11,7 +11,7 @@ CONFIG += qt warn_on thread exceptions
 DESTDIR = ../lib
 
 INCLUDEPATH += \
-             ..\include
+             ../include
 
 HEADERS += \
     #hserialport.h \
