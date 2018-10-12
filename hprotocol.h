@@ -1,23 +1,33 @@
 #ifndef HPROTOCOL_H
 #define HPROTOCOL_H
 
-#include <QObject>
+#include <QThread>
+#include <QTimer>
 
-class HProtocol : public QObject
+//工作线程
+class Worker : public QObject
 {
     Q_OBJECT
-public:
-    explicit HProtocol(QObject *parent = 0);
-
 public:
     void sendAllYx();
     void sendAllYc();
     void sendChangeYx();
-    void processFrame(const QByteArray& data);
-
-signals:
-    void sendData(const QByteArray& data);
+    void processFrame();
 public slots:
+    void handleTimeout();
+
+};
+
+
+class HProtocol : public QThread
+{
+    Q_OBJECT
+public:
+    explicit HProtocol(QObject *parent = 0);
+    ~HProtocol();
+
+public:
+    void run();
 };
 
 #endif // HPROTOCOL_H

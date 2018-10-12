@@ -1,5 +1,19 @@
 #include "hprotocol.h"
-
+#include "huserhandle.h"
+#include "hmsgglobal.h"
+#include <QDebug>
+extern HUserHandle userHandle;
+/************************接收共享队列**************************************/
+//接收串口发来的报文
+QMutex g_recv_mutex;
+std::list<RecvData*> g_recv_list;
+void add_data_to_recv_list(RecvData* recv_data);
+RecvData* remove_data_from_recv_list();
+void clear_recv_list();
+void add_data_for_recv(const QByteArray& baData);
+/*************************外部调用接口****************************************/
+//发送报文接口
+extern void add_data_for_send(unsigned char* data,int len);
 
 static const unsigned char CRC_CODE[]={
         0x000,0x007,0x00e,0x009,0x01c,0x01b,0x012,0x015,
@@ -53,31 +67,119 @@ unsigned char GenCode(unsigned char* pData)
     c=0xff-c;
     return c;
 }
-
-
+/*****************************************************************/
 //规约处理
-HProtocol::HProtocol(QObject *parent) : QObject(parent)
+HProtocol::HProtocol(QObject *parent) : QThread(parent)
+{
+    //connect(this,&QThread::finished,this,&QThread::deleteLater);
+}
+
+HProtocol::~HProtocol()
+{
+    quit();
+    wait();
+}
+
+void HProtocol::run()
+{
+    QTimer m_Timer;
+    Worker woker;
+    connect(&m_Timer,&QTimer::timeout,&woker,&Worker::handleTimeout);
+    m_Timer.start(1000);
+    this->exec();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////
+void Worker::sendAllYx()
 {
 
 }
 
-//
-void HProtocol::sendAllYx()
+void Worker::sendAllYc()
 {
 
 }
 
-void HProtocol::sendAllYc()
+void Worker::sendChangeYx()
 {
 
 }
 
-void HProtocol::sendChangeYx()
-{
 
+void Worker::processFrame()
+{
+    //qDebug()<<"HProtocol:" <<QThread::currentThreadId();
 }
 
-void HProtocol::processFrame(const QByteArray& data)
-{
 
+void Worker::handleTimeout()
+{
+    //qDebug()<<"Worker:: "<<QThread::currentThreadId();
+    static int sendYxTime = 0;
+    static int sendYcTime = 0;
+    if(sendYxTime < userHandle.piConfig.m_wSendYxTime)
+        sendYxTime++;
+    else
+    {
+        sendAllYx();
+        sendYxTime = 0;
+    }
+
+    if(sendYcTime < userHandle.piConfig.m_wSendYcTime)
+        sendYcTime++;
+    else
+    {
+        sendAllYc();
+        sendYcTime = 0;
+    }
+
+    //定时处理发过来的报文，此处定时时间为1s
+    processFrame();
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void add_data_to_recv_list(RecvData* recv_data)
+{
+    g_recv_mutex.lock();
+    g_recv_list.push_back(recv_data);
+    g_recv_mutex.unlock();
+}
+
+RecvData* remove_data_from_recv_list()
+{
+    RecvData* rdata = NULL;
+    g_recv_mutex.lock();
+    if(!g_recv_list.empty())
+    {
+        rdata = g_recv_list.front();
+        g_recv_list.pop_front();
+    }
+    g_recv_mutex.unlock();
+    return rdata;
+}
+
+void clear_recv_list()
+{
+    g_recv_mutex.lock();
+    while(!g_recv_list.empty())
+    {
+        RecvData* rdata = g_recv_list.front();
+        g_recv_list.pop_front();
+        if(rdata->data)
+            delete[] rdata->data;
+        delete rdata;
+    }
+    g_recv_list.clear();
+    g_recv_mutex.unlock();
+}
+
+void add_data_for_recv(const QByteArray& baData)
+{
+    int len = baData.length();
+    RecvData* rData = new RecvData;
+    rData->data = new char[len];
+    rData->len = len+1;
+    rData->type = 0;
+    memcpy(rData->data,baData.data(),len);
+    add_data_to_recv_list(rData);
 }

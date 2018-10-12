@@ -5,7 +5,6 @@
 #include <QTimer>
 #include "huserdbapi.h"
 class QSettings;
-class HProtocol;
 typedef struct _tagpointItem
 {
     quint16 wStationNo;
@@ -48,8 +47,6 @@ public:
     void SendChangeYx();
 signals:
 
-public slots:
-    void sendCdt();
 public:
     QString m_strConfigFilePath;
     LPPLUGINPROC m_lpPluginCallback;
@@ -60,7 +57,6 @@ public:
     PLUGINCONFIG piConfig;
     QSettings  *m_settings;
     QTimer m_Timer;
-    HProtocol m_Protocol;
 private:
     QString strUserName;
 };

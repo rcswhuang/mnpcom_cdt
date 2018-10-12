@@ -1,128 +1,137 @@
 #include "huserminitor.h"
 #include "ui_userminitor.h"
 #include "huserhandle.h"
-#include "huserworker.h"
+#include "hserialport.h"
 #include "hprotocol.h"
 #include <QScrollBar>
-HUserMinitor::HUserMinitor(HUserHandle* handle,QWidget *parent) :
-    m_pUserHandle(handle),QMainWindow(parent),
+#include <QTextCodec>
+#include <QDebug>
+/***********************************************************/
+QMutex g_show_mutex;
+std::list<ShowData*> g_show_list;
+void add_msg_to_show_list(ShowData* recv_data);
+ShowData* remove_msg_from_show_list();
+void clear_show_list();
+void add_msg_for_show(int type,QByteArray& baData);
+/************************************************************/
+extern HUserHandle userHandle;
+
+HUserMinitor::HUserMinitor(QWidget *parent) :QMainWindow(parent),
     ui(new Ui::HUserMinitor)
 {
     ui->setupUi(this); 
-    openSerialPort();
     m_protocol = new HProtocol;
-    connect(m_protocol,SIGNAL(sendData(const QByteArray&)),this,SLOT(handleWritten(const QByteArray&)));
-    connect(&m_timer, &QTimer::timeout, this, &HUserMinitor::handleTimeout);
+    m_protocol->start();
+    m_SerialThread = new HSerialPort(this);
+    if(m_SerialThread->initSerialPort(userHandle.piConfig.m_strPortName,userHandle.piConfig.m_nPortBaudRate))
+        m_SerialThread->start();
+    connect(&m_timer,&QTimer::timeout,this,&HUserMinitor::handleTimeout);
     m_timer.start(1000);
+    //qDebug()<<"HUserMinitor:" <<QThread::currentThreadId();
 }
 
 HUserMinitor::~HUserMinitor()
 {
     delete ui;
+    delete m_protocol;
+    delete m_SerialThread;
 }
 
-void HUserMinitor::openSerialPort()
-{
-    m_serialPort = new QSerialPort(this);
-    //m_serialPort->setPortName(m_pUserHandle->piConfig.m_strPortName);
-    //m_serialPort->setBaudRate(m_pUserHandle->piConfig.m_nPortBaudRate);
-    m_serialPort->setPortName("COM1");
-    m_serialPort->setBaudRate(QSerialPort::Baud9600);
-    m_serialPort->setDataBits(QSerialPort::Data8);//数据位宽 8
-    m_serialPort->setParity(QSerialPort::NoParity);//无奇偶校验
-    m_serialPort->setStopBits(QSerialPort::OneStop);//停止位宽1
-    m_serialPort->setFlowControl(QSerialPort::NoFlowControl);//无控制流
-    if(m_serialPort->open(QIODevice::ReadWrite))
-    {
-        //connect(m_serialPort, &QSerialPort::bytesWritten, this, &HUserMinitor::handleBytesWritten);
-        connect(m_serialPort, &QSerialPort::readyRead, this, &HUserMinitor::handleReadyRead,Qt::DirectConnection);//阻塞式
-        connect(m_serialPort, static_cast<void (QSerialPort::*)(QSerialPort::SerialPortError)>(&QSerialPort::error),
-                this, &HUserMinitor::handleError);
-    }
-
-}
-
-void HUserMinitor::closeSerialPort()
-{
-    if (m_serialPort->isOpen())
-        m_serialPort->close();
-}
-
-void HUserMinitor::getShowData(const QByteArray &data)
-{
-    //showData(data);
-}
-
-void HUserMinitor::handleWritten(const QByteArray& data)
-{
-    m_writeData = data;
-
-    qint64 bytesWritten = m_serialPort->write(data);
-    //showData(data);
-
-    if (bytesWritten == -1) {
-        m_standardOutput << QObject::tr("Failed to write the data to port %1, error: %2").arg(m_serialPort->portName()).arg(m_serialPort->errorString()) << endl;
-        //QCoreApplication::exit(1);
-    } else if (bytesWritten != m_writeData.size()) {
-        m_standardOutput << QObject::tr("Failed to write all the data to port %1, error: %2").arg(m_serialPort->portName()).arg(m_serialPort->errorString()) << endl;
-        //QCoreApplication::exit(1);
-    }
-}
-
-void HUserMinitor::handleReadyRead()
-{
-    //加到队列里面
-    m_readData.clear();
-    m_readData.append(m_serialPort->readAll());
-    m_protocol->processFrame(m_readData);
-    showData(m_readData);
-}
 
 void HUserMinitor::handleTimeout()
 {
-    static ushort wSendYxTime = 0;
-    static ushort wSendYcTime = 0;
-    if(wSendYxTime < m_nYxSendTime)
-        wSendYxTime++;
-    else
+    ShowData* sData = remove_msg_from_show_list();
+    while(sData)
     {
-        m_protocol->sendAllYx();
-        wSendYxTime = 0;
-    }
-
-    if(wSendYcTime < m_nYcSendTime)
-        wSendYcTime++;
-    else
-    {
-        m_protocol->sendAllYc();
-        wSendYcTime = 0;
+        showData(sData);
+        if(sData->data) delete[] sData->data;
+        delete sData;
+        sData = remove_msg_from_show_list();
     }
 }
 
-void HUserMinitor::handleError(QSerialPort::SerialPortError serialPortError)
-{
-    if (serialPortError == QSerialPort::WriteError) {
-        m_standardOutput << QObject::tr("An I/O error occurred while writing the data to port %1, error: %2").arg(m_serialPort->portName()).arg(m_serialPort->errorString()) << endl;
-        //QCoreApplication::exit(1);
-    }
-
-    if (serialPortError == QSerialPort::ReadError) {
-        m_standardOutput << QObject::tr("An I/O error occurred while reading the data from port %1, error: %2").arg(m_serialPort->portName()).arg(m_serialPort->errorString()) << endl;
-        //QCoreApplication::exit(1);
-    }
-}
-
-void HUserMinitor::showData(const QByteArray& data)
+void HUserMinitor::showData(const ShowData* show_data)
 {
     QString temp,temp1;
-    for(int i = 0;i < data.length();i++)
+    char* tempChar = NULL;
+    if(show_data->type == M_ERROR)
     {
-        uchar value = (uchar)data[i];
-        temp1 = QString("%1 ").arg(value,2,16,QLatin1Char('0'));
-        temp += temp1;
+        char* tempChar = new char[show_data->len+1];
+        strcpy(tempChar,show_data->data);
+        tempChar[show_data->len] = '\0';
+        temp = QString(tempChar);
+    }
+    else
+    {
+        for(int i = 0;i < show_data->len;i++)
+        {
+            uchar value = (uchar)show_data->data[i];
+            temp1 = QString("%1 ").arg(value,2,16,QLatin1Char('0'));
+            temp += temp1;
+        }
     }
     temp += " \n";
     ui->textBrowser->insertPlainText(temp);
     QScrollBar *bar = ui->textBrowser->verticalScrollBar();
     bar->setValue(bar->maximum());
+    if(tempChar)
+    {
+        delete tempChar;
+        tempChar = NULL;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void add_msg_to_show_list(ShowData* show_data)
+{
+    g_show_mutex.lock();
+    while(g_show_list.size() > recvMax)
+    {
+        ShowData* rdata = g_show_list.front();
+        g_show_list.pop_front();
+        if(rdata->data)
+            delete[] rdata->data;
+        delete rdata;
+    }
+    g_show_list.push_back(show_data);
+    g_show_mutex.unlock();
+}
+
+ShowData* remove_msg_from_show_list()
+{
+    ShowData* rdata = NULL;
+    g_show_mutex.lock();
+    if(!g_show_list.empty())
+    {
+        rdata = g_show_list.front();
+        g_show_list.pop_front();
+    }
+    g_show_mutex.unlock();
+    return rdata;
+}
+
+void clear_show_list()
+{
+    g_show_mutex.lock();
+    while(!g_show_list.empty())
+    {
+        ShowData* rdata = g_show_list.front();
+        g_show_list.pop_front();
+        if(rdata->data)
+            delete[] rdata->data;
+        delete rdata;
+    }
+    g_show_list.clear();
+    g_show_mutex.unlock();
+}
+
+void add_msg_for_show(int type,QByteArray& baData)
+{
+    int len = baData.length();
+    ShowData* sData = new ShowData;
+    sData->data = new char[len];
+    sData->len = len;
+    sData->type = type;
+    memcpy(sData->data,baData.data(),len);
+    add_msg_to_show_list(sData);
 }

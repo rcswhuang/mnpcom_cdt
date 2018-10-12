@@ -15,7 +15,7 @@ HUserHandle::HUserHandle(QObject *parent) : QObject(parent)
     m_lpPluginCallback = NULL;
     m_strConfigFilePath = QProcessEnvironment::systemEnvironment().value(SYSENVIRONMENTVAR) + "/data/cdt.ini";
     m_settings = new QSettings(m_strConfigFilePath,QSettings::IniFormat);
-    connect(m_Timer,SIGNAL(timeout()),this,SLOT(sendCdt()));
+    loadData();
 }
 
 HUserHandle::~HUserHandle()
@@ -89,8 +89,8 @@ void HUserHandle::loadData()
 {
     piConfig.m_wSendYxTime = m_settings->value("TIME/yxSendTime",30).toUInt();
     piConfig.m_wSendYcTime = m_settings->value("TIME/ycSendTime",30).toUInt();
-    piConfig.m_strPortName = m_settings->value("SERIAL/portName","Com1").toString();
-    piConfig.m_nPortBaudRate = m_settings->value("SERIAL/baudRate",19200).toInt();
+    piConfig.m_strPortName = m_settings->value("SERIAL/portName","COM1").toString();
+    piConfig.m_nPortBaudRate = m_settings->value("SERIAL/baudRate",9600).toInt();
 
     int nCount = m_settings->value("YXLIST",0).toUInt();
     for(int i = 0;i < nCount;i++)
@@ -150,7 +150,7 @@ void HUserHandle::saveData()
 
 void HUserHandle::initProc()
 {
-    HUserMinitor *dlg = new HUserMinitor(this);//启动报文监视窗口
+    HUserMinitor *dlg = new HUserMinitor;//启动报文监视窗口
     dlg->hide();
     //启动时间定时发送
 }
@@ -162,9 +162,9 @@ void HUserHandle::exitProc()
 
 void HUserHandle::showMonitor()
 {
-    HUserMinitor* dlg;
+    /*HUserMinitor* dlg;
     if(dlg->isHidden())
-        dlg->show();
+        dlg->show();*/
 }
 
 QString HUserHandle::getPointName(quint8 type,quint16 stNo,quint16 ptNo)
@@ -225,27 +225,6 @@ bool HUserHandle::findPointInDb(quint8 type,quint16 stNo,quint16 ptNo)
      }
     }
     return bfind;
-}
-
-void HUserHandle::sendCdt()
-{
-    static int nSendYx = 0;
-    static int nSendYc = 0;
-    while(nSendYx < piConfig.m_wSendYxTime)
-        nSendYx++;
-    if(wSendYx == piConfig.m_wSendYxTime)
-    {
-        wSendYx = 0;
-        m_Protocol.sendAllYx();
-    }
-
-    while(nSendYc < piConfig.m_wSendYcTime)
-        nSendYc++;
-    if(wSendYc == piConfig.m_wSendYcTime)
-    {
-        wSendYc = 0;
-        m_Protocol.sendAllYc();
-    }
 }
 
 /////////////////////////////////////////////////////////////////////////////////
