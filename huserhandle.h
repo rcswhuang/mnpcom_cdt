@@ -11,7 +11,7 @@ typedef struct _tagpointItem
     quint16 wPointNo;
 }POINTITEM;
 
-Q_DECLARE_METATYPE(POINTITEM*)
+Q_DECLARE_METATYPE(POINTITEM*)//QVariant
 
 typedef struct _tagPluginConfig
 {
@@ -56,7 +56,7 @@ public:
 public:
     PLUGINCONFIG piConfig;
     QSettings  *m_settings;
-    QTimer m_Timer;
+    QWidget* m_widget;
 private:
     QString strUserName;
 };

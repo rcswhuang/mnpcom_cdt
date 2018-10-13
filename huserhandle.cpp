@@ -3,6 +3,7 @@
 #include <QProcessEnvironment>
 #include <QSettings>
 #include <QString>
+#include <QWidget>
 #include "hpointseldlg.h"
 #include "huserminitor.h"
 #include "hprotocol.h"
@@ -15,7 +16,7 @@ HUserHandle::HUserHandle(QObject *parent) : QObject(parent)
     m_lpPluginCallback = NULL;
     m_strConfigFilePath = QProcessEnvironment::systemEnvironment().value(SYSENVIRONMENTVAR) + "/data/cdt.ini";
     m_settings = new QSettings(m_strConfigFilePath,QSettings::IniFormat);
-    loadData();
+    m_widget = NULL;
 }
 
 HUserHandle::~HUserHandle()
@@ -233,32 +234,52 @@ bool PLUGIN_EXPORT pluginProc(int type,unsigned int param1,long long param2)
 {
     switch(type)
     {
+    case PLG_PARENT:
+    {
+        QWidget* widget = NULL;
+        userHandle.m_widget = widget;
+        break;
+    }
     case PLG_PROCNAME:
+    {
         param1 = PLUGIN_ID_CDT;
         strcpy((char*)param2,"cdt");
         break;
+    }
     case PLG_LOADDATA:
+    {
         userHandle.loadData();
         break;
+    }
     case PLG_SAVEDATA:
+    {
         userHandle.saveData();
         break;
+    }
     case PLG_INITPROC://初始化串口等信息
+    {
         userHandle.initProc();
         break;
+    }
     case PLG_EXITPROC:
         break;
     case PLG_CHANGEDYX:
         break;
     case PLG_PLUGINCONFIG://运行时也要设置回调函数，可以获取实时状态
+    {
         userHandle.pluginConfig((LPPLUGINPROC)param2);
         break;
+    }
     case PLG_SHOWMSGWIN://查看报文状态
+    {
         userHandle.showMonitor();
         break;
+    }
     case PLG_SHOWCONFIGWIN:
+    {
         userHandle.showConfig();
         break;
+    }
     default:
         break;
     }
